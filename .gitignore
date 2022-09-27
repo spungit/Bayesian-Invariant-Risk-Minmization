@@ -11,3 +11,6 @@ logs
 ipynb_checkpoints
 *.ipynb
 __pycache__
+venv/
+.idea/
+
