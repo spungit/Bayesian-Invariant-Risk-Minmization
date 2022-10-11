@@ -11,7 +11,7 @@ import sys
 from torch import nn, optim, autograd
 from model import EBD
 # from model import resnet18_sepfc_us
-from model import MLP
+from model import MLP, GRUScratch
 
 sys.path.append('dataset_scripts')
 from utils import concat_envs,eval_acc_class,eval_acc_reg,mean_nll_class,mean_accuracy_class,mean_nll_reg,mean_accuracy_reg,pretty_print, return_model
@@ -108,6 +108,7 @@ for restart in range(flags.n_restarts):
     #     pred_env_haty_sep.init_sep_by_share(pred_env_haty)
     for step in range(flags.steps):
         mlp.train()
+        
         train_x, train_y, train_g, train_c= dp.fetch_train()
         # if model_type == "irmv1":
         #     train_logits = ebd(train_g).view(-1, 1) * mlp(train_x)
@@ -156,6 +157,10 @@ for restart in range(flags.n_restarts):
             sampleN = 10
             train_penalty = 0
             train_logits = mlp(train_x)
+            
+            # train_loader = torch.utils.data.DataLoader(train_x, shuffle=True, batch_size=1024, drop_last=True)
+            # input_dim = next(iter(train_loader))[0].shape[2]
+            # train_logits = GRUScratch.train(input_dim, 256, 1, 2, 0.2)
             for i in range(sampleN):
                 ebd.re_init_with_noise(flags.prior_sd_coef/flags.data_num)
                 train_logits_w = ebd(train_g).view(-1, 1)*train_logits
@@ -197,7 +202,7 @@ for restart in range(flags.n_restarts):
         train_acc, train_minacc, train_majacc = eval_acc(train_logits, train_y, train_c)
         weight_norm = torch.tensor(0.).cuda()
         for w in mlp.parameters():
-            weight_norm += w.norm().pow(2)
+            weight_norm += w.norm().pow(2) #updating the weights
 
         loss = train_nll.clone()
         loss += flags.l2_regularizer_weight * weight_norm
@@ -212,7 +217,8 @@ for restart in range(flags.n_restarts):
         optimizer.step()
         lr_schd.step()
 
-        if step % flags.print_every == 0:
+        if step % 10 == 0:
+        # if step % flags.print_every == 0:
             if flags.dataset != 'CifarMnist':
                 mlp.eval()
             test_acc_list = []
